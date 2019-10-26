@@ -1,0 +1,311 @@
+---
+title: "US Craft Beer and Brewery Analysis"
+author: "Fred Poon, Laura Lazarescou"
+date: "10/21/2019"
+output:
+  powerpoint_presentation: default
+  slidy_presentation: default
+  ioslides_presentation: default
+subtitle: Presented to Carlos Brito, CEO and Felipe Dutra, CFO
+---
+
+```{r setup, include=FALSE}
+
+# knitr options
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warn = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+# set root directory to project root
+
+# put it in the directory that contains the ENTIRE PROJECT
+# commented out for this project:  knitr::opts_knit$set(root.dir = "..")
+
+# load libraries
+
+library(tidyverse)
+library(usmap)
+
+library(stringr)
+library(class)
+library(caret)
+library(e1071)
+```
+## Beer Data: Quality and Consistency
+* Approximately half of the beer data does not include IBU values (1005/2410) values. 
+* IBU is not a true predictor of taste.
+* Buyers do not base decisions on IBU and consumers don't care. 
+* ABV was not reported for 64 beers but they also lacked IBU so we omitted them.
+
+## Breweries Across the United States
+
+```{r, fig.width=10, fig.height=8}
+
+# get beers data
+beers = read.csv("D:/OneDrive - Southern Methodist University/6306 doing data science/bivinsadler-msds/MDS-6306-Doing-Data-Science-Fall-2019/Unit 8 and 9 Case Study 1/Beers.csv", header = TRUE)
+
+# get breweries data
+breweries = read.csv("D:/OneDrive - Southern Methodist University/6306 doing data science/bivinsadler-msds/MDS-6306-Doing-Data-Science-Fall-2019/Unit 8 and 9 Case Study 1/Breweries.csv", header = TRUE)
+# breweries = as_tibble(breweries)
+
+# get consumption data
+consumption = read.csv("D:/OneDrive - Southern Methodist University/6306 doing data science/bivinsadler-msds/MDS-6306-Doing-Data-Science-Fall-2019/Unit 8 and 9 Case Study 1/Consumption.csv",header = TRUE)
+names(consumption)[names(consumption) == "ï..StateCd"] <- "StateCd"
+
+# breweries %>% group_by(State) %>% tally() %>% arrange(desc(n))
+breweries %>% 
+  count(State, sort=TRUE) %>% 
+  ggplot(aes(x = reorder(State, -n), y = n)) + 
+    geom_bar(stat = "identity", fill = "#aa66cd") +
+    geom_text(aes(label = n), vjust = - 1) +
+    ggtitle("Breweries Across the United States") +
+    ylab("Number of Breweries") +
+    xlab("State") +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle=90, vjust = 1))
+
+# group by state
+# breweries %>% ggplot(aes(State)) + 
+#    geom_bar(fill= "#875D2D") + 
+#    geom_text(stat="count", aes(label=..count..), hjust=-1, size=2.75) + 
+#    ggtitle("Breweries Across the United States") +
+#    ylab("Number of Breweries") +
+#    coord_flip() + 
+#    theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, #face="bold"))
+
+```
+
+## Top 10 States for Brewing
+
+```{r}
+#  Question 1 continued
+#  Showing top 10 / bottom 10
+# top 10
+breweries %>% group_by(State) %>% tally() %>% arrange(desc(n)) %>%
+  head(n = 10) %>%
+  ggplot(aes(reorder(State,n),n)) +
+  geom_bar(stat = "identity", fill = "#66cdaa") +
+  ylab("Number of Breweries") +
+  xlab("State") + 
+  ggtitle("Most Breweries per State") +
+  coord_flip() +
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"))
+```
+
+## States with the Least Number of Breweries
+```{r}
+# bottom 10
+breweries %>% group_by(State) %>% tally() %>% arrange(desc(n)) %>%
+  tail(n = 10) %>%
+  ggplot(aes(reorder(State,-n),n)) +
+  geom_bar(stat = "identity", fill = "#66bdcd") +
+  ylab("Number of Breweries") +
+  xlab("State") + 
+  ggtitle("Least Number of Breweries")+
+  coord_flip() + 
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"))
+
+
+## Question 2
+#Merge beer data with the breweries data. Print the first 6 observations and the last six observations to check the merged file.  #(RMD only, this does not need to be included in the presentation or the deck.)
+# outer join to merge the data set
+
+bb = merge(beers,breweries, by.x = "Brewery_id", by.y = "Brew_ID", all=TRUE)
+
+# head(bb)
+# tail(bb)
+
+
+## Question 3
+#Address the missing values in each column. - answered in Slide 2 above
+
+# separating data set to omit na's
+bb2 = na.omit(bb)
+# summary(bb2)
+
+```
+
+## Median Alcohol (ABV) and Bitterness (IBU) for Each State
+
+```{r,fig.width = 15}
+# Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare.
+
+bb2 %>% 
+  group_by(State) %>% 
+  summarize(medianABV = median(ABV) * 100, medianIBU = median(IBU)) %>%
+  gather('medianABV','medianIBU', key = "category", value = "value") %>%
+  ggplot(aes(x = reorder(State,-value), y = value)) +
+  geom_bar(stat = "identity", aes(fill = category)) +
+  geom_text(aes(label = value), angle = 90, hjust =-1) + 
+  ylab("Median ABV and Median IBU") + xlab("State") + ggtitle("Median ABV and IBU for Each State") +
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"),legend.text = element_text(size = 11), axis.text.x=element_text(angle=90))
+
+# trying with a 100% scale - is it easier to see a correlation?
+# bb2 %>% 
+#  group_by(State) %>% 
+#  summarize(medianABV = median(ABV) * 100, medianIBU = median(IBU)) %>%
+#  gather('medianABV','medianIBU', key = "category", value = "value") %>%
+#   ggplot(aes(x = reorder(State,-value), y = value, fill = category)) +
+#   geom_bar(position = "fill", stat = "identity") +
+#   scale_y_continuous(labels = scales::percent_format()) +
+#   ylab("Percent Median of ABV to Median of IBU") + xlab("State") + ggtitle("Median of ABV to IBU Comparison") +
+#   theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, 
+# face="bold"),legend.text = element_text(size = 11))
+
+```
+
+## Median Alcohol (ABV) by State
+```{r}
+mapdata <- bb2 %>%
+  group_by(State) %>% 
+  summarize(medianABV = median(ABV) * 100, medianIBU = median(IBU))
+names(mapdata)[names(mapdata) == "State"] <- "state"
+names(mapdata)[names(mapdata) == "medianABV"] <- "abv"
+names(mapdata)[names(mapdata) == "medianIBU"] <- "ibu"
+mapdata$state = as.character(mapdata$state)
+mapdata$state = str_trim(mapdata$state)
+
+plot_usmap(data = mapdata, values = "abv", color = "#000000") + 
+  scale_fill_continuous(
+    low = "#bdcd66", high = "#4b5228", name="Median ABV by State", label = scales::comma
+  ) + labs(title = "Median ABV by State") + theme(title=element_text(size=8), legend.position = "right")
+
+```
+
+## Median Bitterness (IBV) by State
+
+```{r}
+
+plot_usmap(data = mapdata, values = "ibu", color = "#000000") + 
+  scale_fill_continuous(
+    low = "#cdaa66", high = "#524428", name="Median IBU by State", label = scales::comma
+  ) + labs(title = "Median IBU by State") + theme(title=element_text(size=8), legend.position = "right")
+
+```
+
+## State with Beer having Highest Alcohol by Volume (ABV)
+
+``` {r}
+# Which state has the maximum alcoholic (ABV) [Alcohol by Volume] beer? Which state has the most bitter (IBU) [International 
+# Bitterness Units] beer?
+maxABV <- bb %>% 
+  select(State, ABV) %>% 
+  arrange(desc(ABV))
+
+head(maxABV, n = 1)
+```
+## State with the Most Bitter Beer
+
+```{r}
+
+maxIBU <- bb %>% 
+  select(State, IBU) %>% 
+  arrange(desc(IBU))
+
+head(maxIBU,n = 1)
+
+```
+
+## Top Beer Consuming States
+
+```{r}
+
+withconsumption <- merge(mapdata,consumption, by.x = "state", by.y = "StateCd", all=TRUE)
+withconsumption %>% arrange(desc(Barrels)) %>% head(n=15) %>%
+  ggplot(aes(x = abv, y = ibu)) + 
+  geom_point(aes(color = state, size = Barrels), alpha = 0.9) +
+  scale_size(range = c(0.5, 25)) +
+  geom_text(label="California - Most Consumption", x=4, y=62, alpha = .75) + 
+  geom_text(label="Maine - Most IBU and ABV", x=4, y=60, alpha=.75) + ggtitle("Top Beer Consuming States")
+
+```
+
+## ABV Distribution
+
+```{r, fig.width=8}
+#summary(bb$ABV)
+
+bb2$ABVPerc = bb2$ABV * 100
+bb2 %>% 
+  ggplot(aes(ABVPerc)) + 
+  geom_histogram(color = "#000000", fill = "#cd6689", bins= 51) + 
+  ggtitle("ABV Distribution") + 
+  ylab("Frequency") + 
+  xlab("ABV %") + 
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"))
+
+```
+
+## ABV & IBU by Style of Beer
+
+```{r, fig.width=7, fig.height=6}
+
+# create a new category for general styles of beers
+bb2$NewStyle = 
+  ifelse(grepl("lager", bb2$Style, ignore.case = TRUE), "Lager",
+    ifelse(grepl("india pale ale", bb2$Style, ignore.case = TRUE),"IPA",
+      ifelse(grepl("ipa", bb2$Style, ignore.case = TRUE),"IPA", 
+        ifelse(grepl("cider", bb2$Style, ignore.case = TRUE), "Cider",
+          ifelse(grepl("ale",bb2$Style, ignore.case = TRUE), "Ale",
+            ifelse(grepl("stout", bb2$Style, ignore.case = TRUE), "Porter/Stout",
+              ifelse(grepl("pilsner", bb2$Style, ignore.case = TRUE), "Pilsner",
+                ifelse(grepl("pilsener", bb2$Style, ignore.case = TRUE), "Pilsner",
+                  ifelse(grepl("porter", bb2$Style, ignore.case = TRUE), "Porter/Stout",
+                    ifelse(grepl("fruit", bb2$Style, ignore.case = TRUE), "Fruit/Herb",
+                      ifelse(grepl("herbed", bb2$Style, ignore.case = TRUE), "Fruit/Herb",
+                        ifelse(grepl("hefeweizen", bb2$Style, ignore.case = TRUE), "Wheat",
+                          ifelse(grepl("wheat", bb2$Style, ignore.case = TRUE), "Wheat","Other")))))))))))))
+
+# bb2 %>% filter(NewStyle == "Other")
+# bb2 %>% group_by(NewStyle) %>% count() %>% arrange(desc(n))
+
+
+
+# View ABV as a percentage
+bb2$ABVPerc = bb2$ABV * 100
+
+bb2 %>%
+  ggplot(aes(x = ABVPerc, y = IBU, color=NewStyle)) +
+  geom_point() +
+  ggtitle("ABV & IBU by Style of Beer") +
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"),legend.text = element_text(size = 11))+xlab("% ABV")
+
+# plot(bb)
+
+```
+
+## KNN
+
+```{r}
+
+AleIPA <- bb2 %>% filter(NewStyle == "IPA" | NewStyle == "Ale") %>% select(NewStyle,ABV,IBU)
+#--view(AleIPA)
+
+set.seed(6)
+perc=.75
+trainIndices = sample(1:dim(AleIPA)[1],round(perc * dim(AleIPA)[1]))
+train = AleIPA[trainIndices,]
+test = AleIPA[-trainIndices,]
+iterations=30
+
+accs = data.frame(accuracy = numeric(iterations), k = numeric(iterations))
+
+for(i in 1:iterations)
+{
+  classifications = knn(train[,c(2,3)],test[,c(2,3)],train$NewStyle, prob = TRUE, k = i)
+  table(test$NewStyle,classifications)
+  matrix = confusionMatrix(table(test$NewStyle,classifications))
+  accs$accuracy[i] = matrix$overall[1]
+  accs$k[i] = i
+}
+
+
+AleIPA %>%
+  ggplot(aes(x = ABV, y = IBU, color=NewStyle)) +
+  geom_point() +
+  ggtitle("ABV & IBU by Style of Beer") +
+  theme(axis.text=element_text(size = 12),axis.title=element_text(size=14, face="bold"),title = element_text(size=16, face="bold"),legend.text = element_text(size = 11))+xlab("% ABV")
+
+
+matrix
+
+```
